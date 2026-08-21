@@ -1,14 +1,11 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-
 export default function TestPage({ params }) {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-
   useEffect(() => {
     async function load() {
       const { data: tq } = await supabase
@@ -20,11 +17,9 @@ export default function TestPage({ params }) {
     }
     load();
   }, [params.id]);
-
   function selectAnswer(questionId, optionIndex) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   }
-
   async function submit() {
     let correct = 0;
     questions.forEach((q) => {
@@ -32,11 +27,10 @@ export default function TestPage({ params }) {
     });
     setScore(correct);
     setSubmitted(true);
-
     // Save the attempt if the user is logged in
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: attempt } = await supabase
+      const { data: attempt, error: attemptError } = await supabase
         .from('test_attempts')
         .insert({
           user_id: user.id,
@@ -47,7 +41,9 @@ export default function TestPage({ params }) {
         })
         .select()
         .single();
-
+      if (attemptError) {
+        alert('Attempt save failed: ' + attemptError.message);
+      }
       if (attempt) {
         const rows = questions.map((q) => ({
           attempt_id: attempt.id,
@@ -55,11 +51,15 @@ export default function TestPage({ params }) {
           selected_answer: answers[q.id] ?? null,
           is_correct: answers[q.id] === q.correct_answer,
         }));
-        await supabase.from('attempt_answers').insert(rows);
+        const { error: answersError } = await supabase.from('attempt_answers').insert(rows);
+        if (answersError) {
+          alert('Answers save failed: ' + answersError.message);
+        }
       }
+    } else {
+      alert('No logged-in user found — attempt not saved.');
     }
   }
-
   if (submitted) {
     return (
       <div className="container">
@@ -77,7 +77,6 @@ export default function TestPage({ params }) {
       </div>
     );
   }
-
   return (
     <div className="container">
       <h1>Mock Test</h1>
