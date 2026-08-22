@@ -30,7 +30,7 @@ export default function TestPage({ params }) {
     // Save the attempt if the user is logged in
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: attempt, error: attemptError } = await supabase
+      const { data: attempt } = await supabase
         .from('test_attempts')
         .insert({
           user_id: user.id,
@@ -41,9 +41,7 @@ export default function TestPage({ params }) {
         })
         .select()
         .single();
-      if (attemptError) {
-        alert('Attempt save failed: ' + attemptError.message);
-      }
+
       if (attempt) {
         const rows = questions.map((q) => ({
           attempt_id: attempt.id,
@@ -51,13 +49,8 @@ export default function TestPage({ params }) {
           selected_answer: answers[q.id] ?? null,
           is_correct: answers[q.id] === q.correct_answer,
         }));
-        const { error: answersError } = await supabase.from('attempt_answers').insert(rows);
-        if (answersError) {
-          alert('Answers save failed: ' + answersError.message);
-        }
+        await supabase.from('attempt_answers').insert(rows);
       }
-    } else {
-      alert('No logged-in user found — attempt not saved.');
     }
   }
   if (submitted) {
@@ -66,6 +59,10 @@ export default function TestPage({ params }) {
         <div className="card" style={{ textAlign: 'center' }}>
           <h1>Score: {score} / {questions.length}</h1>
           <p>Review your answers below.</p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', margin: '1.5rem 0' }}>
+            <a href="/" className="btn">Back to homepage</a>
+            <a href={`/test/${params.id}`} className="btn" onClick={() => window.location.reload()}>Retake this test</a>
+          </div>
           {questions.map((q) => (
             <div key={q.id} style={{ textAlign: 'left', marginTop: '1rem' }}>
               <strong>{q.question_text}</strong>
