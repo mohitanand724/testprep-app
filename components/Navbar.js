@@ -22,7 +22,7 @@ export default function Navbar() {
     <nav style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, padding: '16px 24px' }}>
       {user ? (
         <>
-          <span>{user.email}</span>
+          <a href="/profile">{user.email}</a>
           <button onClick={handleLogout}>Log out</button>
         </>
       ) : (
