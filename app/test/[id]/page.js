@@ -1,11 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
+
 export default function TestPage({ params }) {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(null); // seconds remaining, null = no timer / not loaded yet
+
   useEffect(() => {
     async function load() {
       const { data: tq } = await supabase
@@ -14,12 +17,41 @@ export default function TestPage({ params }) {
         .eq('test_id', params.id)
         .order('position');
       setQuestions(tq?.map((row) => row.questions) || []);
+
+           const { data: test, error: testError } = await supabase
+        .from('mock_tests')
+        .select('duration_minutes')
+        .eq('id', params.id)
+        .single();
+      console.log('duration_minutes fetch:', test, testError);
+      if (test?.duration_minutes) {
+        setTimeLeft(test.duration_minutes * 60);
+      }
     }
     load();
   }, [params.id]);
+
+  // Countdown ticker + auto-submit when time runs out
+  useEffect(() => {
+    if (submitted || timeLeft === null) return;
+    if (timeLeft <= 0) {
+      submit();
+      return;
+    }
+    const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [timeLeft, submitted]);
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
   function selectAnswer(questionId, optionIndex) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   }
+
   async function submit() {
     let correct = 0;
     questions.forEach((q) => {
@@ -41,7 +73,6 @@ export default function TestPage({ params }) {
         })
         .select()
         .single();
-
       if (attempt) {
         const rows = questions.map((q) => ({
           attempt_id: attempt.id,
@@ -53,6 +84,7 @@ export default function TestPage({ params }) {
       }
     }
   }
+
   if (submitted) {
     return (
       <div className="container">
@@ -74,9 +106,26 @@ export default function TestPage({ params }) {
       </div>
     );
   }
+
   return (
     <div className="container">
-      <h1>Mock Test</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>Mock Test</h1>
+        {timeLeft !== null && (
+          <div
+            style={{
+              fontWeight: 'bold',
+              fontSize: 18,
+              padding: '6px 14px',
+              borderRadius: 8,
+              backgroundColor: timeLeft <= 60 ? '#a33' : '#c9a44c',
+              color: timeLeft <= 60 ? '#fff' : '#1a1a2e',
+            }}
+          >
+            {formatTime(timeLeft)}
+          </div>
+        )}
+      </div>
       {questions.map((q) => (
         <div className="card" key={q.id}>
           <p><strong>{q.question_text}</strong></p>
