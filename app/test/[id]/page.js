@@ -7,7 +7,10 @@ export default function TestPage({ params }) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(null); // seconds remaining, null = no timer / not loaded yet
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const storageKey = `passmark_test_progress_${params.id}`;
 
   useEffect(() => {
     async function load() {
@@ -18,18 +21,39 @@ export default function TestPage({ params }) {
         .order('position');
       setQuestions(tq?.map((row) => row.questions) || []);
 
-           const { data: test, error: testError } = await supabase
+      const { data: test } = await supabase
         .from('mock_tests')
         .select('duration_minutes')
         .eq('id', params.id)
         .single();
-      console.log('duration_minutes fetch:', test, testError);
-      if (test?.duration_minutes) {
+
+      // Check for saved progress in this browser
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setAnswers(parsed.answers || {});
+          if (typeof parsed.timeLeft === 'number') {
+            setTimeLeft(parsed.timeLeft);
+          } else if (test?.duration_minutes) {
+            setTimeLeft(test.duration_minutes * 60);
+          }
+        } catch {
+          if (test?.duration_minutes) setTimeLeft(test.duration_minutes * 60);
+        }
+      } else if (test?.duration_minutes) {
         setTimeLeft(test.duration_minutes * 60);
       }
+      setLoaded(true);
     }
     load();
   }, [params.id]);
+
+  // Save progress to browser storage whenever answers or timeLeft change
+  useEffect(() => {
+    if (!loaded || submitted) return;
+    localStorage.setItem(storageKey, JSON.stringify({ answers, timeLeft }));
+  }, [answers, timeLeft, loaded, submitted]);
 
   // Countdown ticker + auto-submit when time runs out
   useEffect(() => {
@@ -59,7 +83,8 @@ export default function TestPage({ params }) {
     });
     setScore(correct);
     setSubmitted(true);
-    // Save the attempt if the user is logged in
+    localStorage.removeItem(storageKey); // clear saved progress once finished
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: attempt } = await supabase
