@@ -9,6 +9,7 @@ export default function TestPage({ params }) {
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [duration, setDuration] = useState(null); // full duration in seconds, for restart
 
   const storageKey = `passmark_test_progress_${params.id}`;
 
@@ -27,7 +28,9 @@ export default function TestPage({ params }) {
         .eq('id', params.id)
         .single();
 
-      // Check for saved progress in this browser
+      const fullDurationSeconds = test?.duration_minutes ? test.duration_minutes * 60 : null;
+      setDuration(fullDurationSeconds);
+
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
@@ -35,27 +38,25 @@ export default function TestPage({ params }) {
           setAnswers(parsed.answers || {});
           if (typeof parsed.timeLeft === 'number') {
             setTimeLeft(parsed.timeLeft);
-          } else if (test?.duration_minutes) {
-            setTimeLeft(test.duration_minutes * 60);
+          } else {
+            setTimeLeft(fullDurationSeconds);
           }
         } catch {
-          if (test?.duration_minutes) setTimeLeft(test.duration_minutes * 60);
+          setTimeLeft(fullDurationSeconds);
         }
-      } else if (test?.duration_minutes) {
-        setTimeLeft(test.duration_minutes * 60);
+      } else {
+        setTimeLeft(fullDurationSeconds);
       }
       setLoaded(true);
     }
     load();
   }, [params.id]);
 
-  // Save progress to browser storage whenever answers or timeLeft change
   useEffect(() => {
     if (!loaded || submitted) return;
     localStorage.setItem(storageKey, JSON.stringify({ answers, timeLeft }));
   }, [answers, timeLeft, loaded, submitted]);
 
-  // Countdown ticker + auto-submit when time runs out
   useEffect(() => {
     if (submitted || timeLeft === null) return;
     if (timeLeft <= 0) {
@@ -76,6 +77,13 @@ export default function TestPage({ params }) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   }
 
+  function clearAndRestart() {
+    if (!confirm('Clear all your answers and restart this test from the beginning?')) return;
+    localStorage.removeItem(storageKey);
+    setAnswers({});
+    setTimeLeft(duration);
+  }
+
   async function submit() {
     let correct = 0;
     questions.forEach((q) => {
@@ -83,7 +91,7 @@ export default function TestPage({ params }) {
     });
     setScore(correct);
     setSubmitted(true);
-    localStorage.removeItem(storageKey); // clear saved progress once finished
+    localStorage.removeItem(storageKey);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -136,20 +144,36 @@ export default function TestPage({ params }) {
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>Mock Test</h1>
-        {timeLeft !== null && (
-          <div
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {timeLeft !== null && (
+            <div
+              style={{
+                fontWeight: 'bold',
+                fontSize: 18,
+                padding: '6px 14px',
+                borderRadius: 8,
+                backgroundColor: timeLeft <= 60 ? '#a33' : '#c9a44c',
+                color: timeLeft <= 60 ? '#fff' : '#1a1a2e',
+              }}
+            >
+              {formatTime(timeLeft)}
+            </div>
+          )}
+                <button
+            onClick={clearAndRestart}
             style={{
-              fontWeight: 'bold',
-              fontSize: 18,
-              padding: '6px 14px',
+              fontSize: 14,
+              padding: '6px 12px',
               borderRadius: 8,
-              backgroundColor: timeLeft <= 60 ? '#a33' : '#c9a44c',
-              color: timeLeft <= 60 ? '#fff' : '#1a1a2e',
+              border: '1px solid #c9a44c',
+              background: 'transparent',
+              color: '#c9a44c',
+              cursor: 'pointer',
             }}
           >
-            {formatTime(timeLeft)}
-          </div>
-        )}
+            Clear & restart
+          </button>
+        </div>
       </div>
       {questions.map((q) => (
         <div className="card" key={q.id}>
