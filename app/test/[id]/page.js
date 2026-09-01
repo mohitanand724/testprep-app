@@ -9,8 +9,8 @@ export default function TestPage({ params }) {
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [duration, setDuration] = useState(null); // full duration in seconds, for restart
-
+    const [duration, setDuration] = useState(null); // full duration in seconds, for restart
+  const [passage, setPassage] = useState(null);
   const storageKey = `passmark_test_progress_${params.id}`;
 
   useEffect(() => {
@@ -22,15 +22,15 @@ export default function TestPage({ params }) {
         .order('position');
       setQuestions(tq?.map((row) => row.questions) || []);
 
-      const { data: test } = await supabase
+            const { data: test } = await supabase
         .from('mock_tests')
-        .select('duration_minutes')
+        .select('duration_minutes, passage')
         .eq('id', params.id)
         .single();
 
       const fullDurationSeconds = test?.duration_minutes ? test.duration_minutes * 60 : null;
       setDuration(fullDurationSeconds);
-
+      setPassage(test?.passage || null);
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
@@ -173,8 +173,14 @@ export default function TestPage({ params }) {
           >
             Clear & restart
           </button>
-        </div>
+                </div>
       </div>
+      {passage && (
+        <div className="card" style={{ marginBottom: '1.5rem', whiteSpace: 'pre-line', lineHeight: 1.6 }}>
+          <h2 style={{ marginTop: 0, color: '#c9a44c' }}>Reading Passage</h2>
+          <p>{passage}</p>
+        </div>
+      )}
       {questions.map((q) => (
         <div className="card" key={q.id}>
           <p><strong>{q.question_text}</strong></p>
